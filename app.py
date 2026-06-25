@@ -1,10 +1,12 @@
 import json
 import re
 from datetime import datetime
+from typing import Dict, List
 
 import streamlit as st
 
 
+# Utils
 def slugify(s: str) -> str:
     s = s.lower()
     s = re.sub(r"[^a-z0-9]+", "-", s).strip("-")
@@ -12,111 +14,84 @@ def slugify(s: str) -> str:
 
 
 def estimate_tokens(text: str) -> int:
-    # Very rough approximation (~4 chars per token)
     return max(1, (len(text) + 3) // 4)
 
 
-def task_specs(task_type: str) -> dict:
-    specs = {
-        "Create Dashboard": {
-            "role": "You are a senior analytics engineer and dashboard designer.",
-            "goal": "Design a practical, decision-focused dashboard from the provided context.",
-            "guidelines": [
-                "Identify primary personas and their key decisions.",
-                "Derive 5–8 KPIs with clear definitions, formulas, and grain.",
-                "Recommend visuals and layout; specify filters, drilldowns, and interactions.",
-                "State data sources, assumptions, and data quality considerations.",
-                "Include performance, accessibility, and maintenance notes.",
-                "Provide a concise implementation plan (queries/measures or pseudo-SQL).",
-            ],
-        },
-        "Analyze Code": {
-            "role": "You are a principal software engineer and code reviewer.",
-            "goal": "Analyze the provided code or description and produce actionable findings.",
-            "guidelines": [
-                "Summarize responsibilities, control flow, and dependencies.",
-                "List bugs, edge cases, security, and performance issues with severity and fixes.",
-                "Recommend refactors with rationale and complexity impact.",
-                "Propose focused tests (given/when/then).",
-                "Call out risks, trade-offs, and unknowns.",
-            ],
-        },
-        "Rewrite Code": {
-            "role": "You are a senior software engineer rewriting code while preserving behavior.",
-            "goal": "Rewrite the code to improve readability, safety, and performance without changing intended behavior unless instructed.",
-            "guidelines": [
-                "Preserve public API and semantics unless otherwise specified.",
-                "Use modern idioms, secure patterns, and project-typical style.",
-                "Validate inputs; improve error handling and edge-case coverage.",
-                "Add minimal docstrings/comments to clarify intent (no verbose narration).",
-                "Provide tests and migration notes if signatures change.",
-            ],
-        },
-    }
-    return specs[task_type]
+def read_uploaded_file(uploaded_file) -> str:
+    try:
+        content = uploaded_file.read().decode("utf-8")
+        return f"\n--- File: {uploaded_file.name} ---\n{content}\n--- End of file ---\n"
+    except Exception as e:
+        return f"\n[Error reading file: {e}]\n"
 
 
-def json_schema_for(task_type: str) -> dict:
-    if task_type == "Create Dashboard":
-        return {
-            "personas": [""],
-            "decision_questions": [""],
-            "kpis": [
-                {
-                    "name": "",
-                    "definition": "",
-                    "formula": "",
-                    "granularity": "",
-                    "owner": "",
-                }
-            ],
-            "visuals": [
-                {
-                    "title": "",
-                    "chart": "",
-                    "fields": [""],
-                    "interactions": [""],
-                    "notes": "",
-                }
-            ],
-            "layout": {"sections": [""], "notes": ""},
-            "data_sources": [""],
-            "implementation": {
-                "queries": [""],
-                "measures": [""],
-                "performance_notes": [""],
-            },
-            "risks": [""],
-            "assumptions": [""],
-        }
-    if task_type == "Analyze Code":
-        return {
-            "summary": "",
-            "issues": [
-                {
-                    "type": "bug|security|performance|style",
-                    "location": "",
-                    "description": "",
-                    "severity": "low|medium|high",
-                    "fix": "",
-                    "references": [""],
-                }
-            ],
-            "complexity": {"cognitive": "", "cyclomatic": "", "hotspots": [""]},
-            "tests": [{"name": "", "given": "", "when": "", "then": ""}],
-            "refactor_plan": [{"step": "", "rationale": ""}],
-            "risks": [""],
-            "assumptions": [""],
-        }
-    # Rewrite Code
-    return {
-        "rewritten_code": "```language\n...\n```",
-        "change_log": [{"before": "", "after": "", "reason": ""}],
-        "compatibility_notes": [""],
+# Task configurations (optimized for token efficiency)
+TASK_SPECS = {
+    "Create Dashboard": {
+        "role": "Senior analytics engineer & dashboard designer",
+        "goal": "Design decision-focused dashboard from context",
+        "guidelines": [
+            "Identify personas & key decisions",
+            "Define 5-8 KPIs: name, formula, grain, owner",
+            "Specify visuals, layout, filters, interactions",
+            "List data sources & quality notes",
+            "Include performance/accessibility notes",
+            "Provide implementation plan (queries/pseudo-SQL)",
+        ],
+    },
+    "Analyze Code": {
+        "role": "Principal software engineer & code reviewer",
+        "goal": "Analyze code, produce actionable findings",
+        "guidelines": [
+            "Summarize responsibilities, flow, dependencies",
+            "List bugs/security/performance issues: severity + fix",
+            "Recommend refactors: rationale + complexity",
+            "Propose tests (given/when/then)",
+            "Call out risks, trade-offs, unknowns",
+        ],
+    },
+    "Rewrite Code": {
+        "role": "Senior software engineer",
+        "goal": "Improve code: readability, safety, performance",
+        "guidelines": [
+            "Preserve API/semantics unless instructed",
+            "Use modern idioms, secure patterns",
+            "Validate inputs, improve error handling",
+            "Add minimal docstrings (no verbosity)",
+            "Provide tests + migration notes if needed",
+        ],
+    },
+}
+
+
+JSON_SCHEMAS = {
+    "Create Dashboard": {
+        "personas": [""],
+        "decisions": [""],
+        "kpis": [{"name": "", "def": "", "formula": "", "grain": "", "owner": ""}],
+        "visuals": [{"title": "", "chart": "", "fields": [""], "notes": ""}],
+        "layout": {"sections": [""], "notes": ""},
+        "sources": [""],
+        "impl": {"queries": [""], "notes": [""], "risks": [""]},
+    },
+    "Analyze Code": {
+        "summary": "",
+        "issues": [
+            {"type": "bug|sec|perf|style", "loc": "", "desc": "", "sev": "low|med|high", "fix": ""}
+        ],
+        "complexity": {"cognitive": "", "cyclomatic": "", "hotspots": [""]},
         "tests": [{"name": "", "given": "", "when": "", "then": ""}],
-        "migration_steps": [""],
-        "assumptions": [""],
-    }
+        "refactors": [{"step": "", "why": ""}],
+        "risks": [""],
+    },
+    "Rewrite Code": {
+        "code": "```lang\n...\n```",
+        "changes": [{"before": "", "after": "", "why": ""}],
+        "compat": [""],
+        "tests": [{"name": "", "given": "", "when": "", "then": ""}],
+        "migration": [""],
+    },
+}
 
 
 def build_prompt(
@@ -127,64 +102,44 @@ def build_prompt(
     ask_questions: bool,
     structured_reasoning: bool,
     extra_requirements: str,
+    token_efficient: bool,
 ) -> str:
-    spec = task_specs(task_type)
-    guidelines = list(spec["guidelines"])  # copy
+    spec = TASK_SPECS[task_type]
+    guidelines = spec["guidelines"].copy()
 
     if ask_questions:
-        guidelines.insert(
-            0,
-            "If the context is ambiguous, ask up to 3 targeted clarifying questions before proceeding.",
-        )
+        guidelines.insert(0, "If unclear, ask max 3 clarifying questions")
     if structured_reasoning:
-        guidelines.append(
-            "Use concise, structured reasoning in headings/bullets (avoid revealing internal chain-of-thought)."
-        )
+        guidelines.append("Use structured headings/bullets")
 
-    sections = []
-    sections.append(f"Task: {task_type}")
-    sections.append(f"Role: {spec['role']}")
-    sections.append(f"Objective: {spec['goal']}")
-    sections.append(f"Tone: {tone.lower()}")
+    if token_efficient:
+        guidelines.append("Be concise: minimize tokens, maximize clarity")
+
+    sections = [
+        f"Task: {task_type}",
+        f"Role: {spec['role']}",
+        f"Goal: {spec['goal']}",
+        f"Tone: {tone.lower()}",
+    ]
 
     if input_text.strip():
-        sections.append("Context:\n" + input_text.strip())
+        sections.append(f"Context:\n{input_text.strip()}")
     if extra_requirements.strip():
-        sections.append("Additional requirements:\n" + extra_requirements.strip())
+        sections.append(f"Requirements:\n{extra_requirements.strip()}")
 
-    # Guidelines
-    gl_text = "\n".join([f"- {g}" for g in guidelines])
-    sections.append("Guidelines:\n" + gl_text)
+    sections.append("Guidelines:\n" + "\n".join(f"- {g}" for g in guidelines))
 
-    # Output format
     if output_format == "JSON":
-        schema = json_schema_for(task_type)
-        schema_text = json.dumps(schema, indent=2, ensure_ascii=False)
+        schema = JSON_SCHEMAS.get(task_type, JSON_SCHEMAS["Rewrite Code"])
         sections.append(
-            "Output format:\n"
-            "- Respond with ONLY valid JSON matching the schema below.\n"
-            "- Do not include markdown fences or commentary outside the JSON.\n"
-            f"Schema:\n{schema_text}"
-        )
-        sections.append(
-            "Validation:\n- Ensure fields are complete and consistent. Use empty strings or arrays where unknown."
+            f"Output: JSON only (no markdown). Schema:\n{json.dumps(schema, ensure_ascii=False)}"
         )
     else:
-        sections.append(
-            "Output format (plain text):\n"
-            "- Start with a brief summary.\n"
-            "- Use clear section headings and bullet points.\n"
-            "- Include assumptions and risks at the end."
-        )
+        sections.append("Output: Summary → Sections → Assumptions/Risks")
 
-    sections.append(
-        "Quality bar:\n"
-        "- Be precise, unambiguous, and actionable.\n"
-        "- Prefer specifics over generalities.\n"
-        "- Keep the response self-contained."
-    )
+    sections.append("Quality: Precise, actionable, self-contained")
 
-    return "\n\n".join(sections).strip()
+    return "\n\n".join(sections)
 
 
 # UI
@@ -195,33 +150,43 @@ st.title("🧰 Prompt Builder")
 with st.sidebar:
     st.header("Settings")
     task_type = st.selectbox(
-        "Task type",
-        options=["Create Dashboard", "Analyze Code", "Rewrite Code"],
-        index=0,
+        "Task type", options=list(TASK_SPECS.keys()), index=0
     )
-    tone = st.selectbox("Tone/level", ["Concise", "Detailed"], index=0)
-    output_format = st.selectbox("Output format", ["Plain text", "JSON"], index=0)
-    ask_questions = st.checkbox(
-        "If ambiguous, ask clarifying questions first", value=True
-    )
-    structured_reasoning = st.checkbox(
-        "Use structured reasoning (headings/bullets)", value=True
-    )
+    tone = st.selectbox("Tone", ["Concise", "Detailed"], index=0)
+    output_format = st.selectbox("Format", ["Plain text", "JSON"], index=0)
+    ask_questions = st.checkbox("Ask clarifying questions", value=True)
+    structured_reasoning = st.checkbox("Structured reasoning", value=True)
+    token_efficient = st.checkbox("Token-efficient prompts", value=True)
 
     extra_requirements = st.text_area(
-        "Additional requirements (optional)", height=120, placeholder="Constraints, style guides, domain notes, etc."
+        "Extra requirements", height=80, placeholder="Constraints, style notes..."
     )
 
 col_in, col_out = st.columns([0.55, 0.45])
 
 with col_in:
+    st.subheader("Input")
+    
+    # File upload
+    uploaded_files = st.file_uploader(
+        "Upload files", 
+        type=["txt", "py", "js", "ts", "json", "md", "sql", "csv"],
+        accept_multiple_files=True,
+        help="Upload code files, docs, or data files"
+    )
+    
+    file_content = ""
+    if uploaded_files:
+        for file in uploaded_files:
+            file_content += read_uploaded_file(file)
+        st.success(f"Loaded {len(uploaded_files)} file(s)")
+    
+    # Text input
     input_text = st.text_area(
-        "Your input/context",
-        height=260,
-        placeholder=(
-            "Describe your data/business need for a dashboard, paste code to analyze, or the code you want rewritten.\n"
-            "You can also include goals, constraints, or target audience."
-        ),
+        "Or paste context here",
+        height=200,
+        placeholder="Describe your task, paste code, or add context...",
+        value=file_content,
     )
 
     disabled = len(input_text.strip()) == 0
@@ -234,6 +199,7 @@ with col_in:
             ask_questions=ask_questions,
             structured_reasoning=structured_reasoning,
             extra_requirements=extra_requirements,
+            token_efficient=token_efficient,
         )
         st.session_state["generated_prompt"] = prompt
         st.session_state["generated_meta"] = {
@@ -241,6 +207,10 @@ with col_in:
             "format": output_format,
             "created_at": datetime.utcnow().isoformat() + "Z",
         }
+        
+        # Show token estimate prominently
+        token_count = estimate_tokens(prompt)
+        st.info(f"📊 **Estimated tokens for this task:** ~{token_count:,} tokens")
 
 with col_out:
     st.subheader("Generated Prompt")
@@ -251,13 +221,10 @@ with col_out:
         st.code(prompt, language=lang)
         fname = f"prompt-{slugify(meta.get('task', 'task'))}-{slugify(meta.get('format', 'plain'))}.txt"
         st.download_button(
-            label="Download prompt",
-            data=prompt,
-            file_name=fname,
-            mime="text/plain",
+            label="Download", data=prompt, file_name=fname, mime="text/plain"
         )
         st.caption(
-            f"Length: {len(prompt):,} chars · ~{estimate_tokens(prompt):,} tokens · Generated {meta.get('created_at', '')}"
+            f"{len(prompt):,} chars · ~{estimate_tokens(prompt):,} tokens · {meta.get('created_at', '')}"
         )
     else:
-        st.info("Generate a prompt to see it here. You can download it once generated.")
+        st.info("Generate a prompt to see it here")
