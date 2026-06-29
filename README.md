@@ -30,7 +30,7 @@ source venv/bin/activate
 3. Run the app:
    
    ```bash
-   streamlit run app.py
+   kill $(lsof -t -i:8501) || true && python3 -m streamlit run app.py --server.port 8501
    ```
 
 4. Open the local URL shown in the terminal (typically http://localhost:8501).
