@@ -1,7 +1,7 @@
 import json
 import re
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import streamlit as st
 
@@ -94,6 +94,26 @@ JSON_SCHEMAS = {
 }
 
 
+PROMPT_FRAMEWORKS = {
+    "(None)": None,
+    "TAG": ["Task", "Action", "Goal"],
+    "RTF": ["Role", "Task", "Format"],
+    "CARE": ["Context", "Action", "Result", "Example"],
+    "RISE": ["Role", "Input", "Steps", "Expectation"],
+    "RACE": ["Role", "Action", "Context", "Expectation"],
+    "APE": ["Action", "Purpose", "Expectation"],
+    "CRISPE": ["Capacity", "Insight", "Statement", "Personality", "Experiment"],
+    "COAST": ["Context", "Objective", "Actions", "Scenario", "Task"],
+    "TRACE": ["Task", "Request", "Action", "Context", "Example"],
+    "ROSES": ["Role", "Objective", "Scenario", "Expected Solution", "Steps"],
+    "PECRA": ["Purpose", "Expectation", "Context", "Request", "Action"],
+    "5W1H": ["Who", "What", "When", "Where", "Why", "How"],
+    "BAB": ["Before", "After", "Bridge"],
+    "STAR": ["Situation", "Task", "Action", "Result"],
+    "GRADE": ["Goals", "Request", "Action", "Detail", "Examples"],
+}
+
+
 def build_prompt(
     input_text: str,
     task_type: str,
@@ -162,6 +182,18 @@ with st.sidebar:
         "Extra requirements", height=80, placeholder="Constraints, style notes..."
     )
 
+    st.header("Frameworks")
+    framework = st.selectbox(
+        "Prompt framework",
+        options=list(PROMPT_FRAMEWORKS.keys()),
+        help="Select a framework to structure your prompt. This will insert a template.",
+    )
+
+    if framework and framework != "(None)" and st.button(f"Apply {framework} framework"):
+        template_fields = PROMPT_FRAMEWORKS[framework]
+        template = "\n".join(f"**{field}:** " for field in template_fields)
+        st.session_state.framework_template = template
+
 col_in, col_out = st.columns([0.55, 0.45])
 
 with col_in:
@@ -182,11 +214,17 @@ with col_in:
         st.success(f"Loaded {len(uploaded_files)} file(s)")
     
     # Text input
+    # Handle framework template insertion
+    initial_input = file_content
+    if "framework_template" in st.session_state:
+        initial_input += st.session_state.pop("framework_template")
+
     input_text = st.text_area(
         "Or paste context here",
         height=200,
         placeholder="Describe your task, paste code, or add context...",
-        value=file_content,
+        value=initial_input,
+        key="input_text_area"
     )
 
     disabled = len(input_text.strip()) == 0
